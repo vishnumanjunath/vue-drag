@@ -1,6 +1,7 @@
 <template>
   <svg
-    @mousedown="$emit('mousedown')"
+    @mousedown="$emit('mousedown', $event)"
+    @mousemove.stop.prevent="$emit('mousemove', $event)"
     class="rotate_svg"
     height=".2in"
     style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
