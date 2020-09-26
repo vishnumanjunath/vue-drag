@@ -38,9 +38,10 @@
 </template>
 <script lang="ts">
 import { defineComponent, reactive, ref, Ref } from 'vue';
-import { Object, Bounds, MousePoistion } from '@/types';
+import { Shape, Bounds, MousePoistion } from '@/types';
+import _ from 'lodash';
 
-export const DragResize = defineComponent({
+export default defineComponent({
 	name: 'drag-resize',
 	props: {
 		object: {
