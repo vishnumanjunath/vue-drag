@@ -12,7 +12,10 @@
   "dependencies": {
     "core-js": "^3.6.5",
     "lodash": "^4.17.20",
-    "vue": "^3.0.0-0"
+    "vue": "^3.0.0-0",
+    "prettier": "^1.19.1",
+    "typescript": "~3.9.3",
+    "eslint": "^6.7.2"
   },
   "devDependencies": {
     "@types/chai": "^4.2.11",
