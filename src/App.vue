@@ -1,336 +1,278 @@
 <template>
-  <div id="app" @mousedown.self="deselectTable()">
-    <div class="parent_canvas" id="parent_canvas" @mousedown.self="deselectTable()">
-      <div
-        v-for="table in tables"
-        :key="table.id"
-        class="draggable"
-        :class="{ 'active': draggable_element_id === table.id }"
-        :id="table.id"
-      >
-        <Rotate
-          v-if="draggable_element_id === table.id && table.type != 1"
-          @mousedown="mouseDown"
-          @mousemove="rotate"
-        ></Rotate>
-        <div
-          class="drag_item"
-          @mousemove.self="drag"
-          @mousedown="selectTable(table.id)"
-        >{{ table.name }}</div>
-        <template v-if="draggable_element_id === table.id">
-          <div
-            class="resizer resizer_top"
-            @mousedown="resizeMouseDown"
-            @mousemove="resize('top', $event)"
-          ></div>
-          <div
-            class="resizer resizer_right"
-            @mousedown="resizeMouseDown"
-            @mousemove="resize('right', $event)"
-          ></div>
-          <div
-            class="resizer resizer_bottom"
-            @mousedown="resizeMouseDown"
-            @mousemove="resize('bottom', $event)"
-          ></div>
-          <div
-            class="resizer resizer_left"
-            @mousedown="resizeMouseDown"
-            @mousemove="resize('left', $event)"
-          ></div>
-        </template>
-      </div>
-      <!-- X => {{ x }} : Y => {{ y }} -->
-    </div>
-  </div>
+	<div id="app">
+		<div class="floor_paln_editor">
+			<div class="parent_canvas" id="parent_canvas" @mousedown.self="deselectObject()">
+				<drag-resize
+					v-for="object in objects"
+					:ref="object.id"
+					:key="object.id"
+					:object="object"
+					:selectedObjectId="selectedObjectId"
+					@selectobject="selectObject"
+				></drag-resize>
+			</div>
+		</div>
+	</div>
 </template>
-<script>
-import Rotate from '@/components/rotate.vue';
 
-export default {
+<script lang="ts">
+import { defineComponent, ref, reactive, computed, onBeforeUpdate } from 'vue';
+import DragResize from '@/components/drag-resize.vue';
+import { NewObject, Shape } from '@/types';
+import { SHAPE_MAX_WIDTH, SHAPE_MIN_WIDTH, SHAPE_MIN_HEIGHT, SHAPE_MAX_HEIGHT, SHAPE_SHAPE_RECTANGLE, uuid, SHAPE_SHAPE_CIRCLE } from '@/utils';
+import _ from 'lodash';
+
+export default defineComponent({
 	name: 'App',
-	components: { Rotate },
-	data() {
-		return {
-			tables: [
-				{
-					id: 'draggable_1',
-					name: 'A',
-					width: 50,
-					height: 50,
-					top: 80,
-					left: 70,
-					angle: 45,
-					// type 0 is rectangle
-					type: 0,
-				},
-				{
-					id: 'draggable_2',
-					name: 'B',
-					width: 150,
-					height: 100,
-					top: 200,
-					left: 150,
-					angle: 0,
-					type: 0,
-				},
-				{
-					id: 'draggable_3',
-					name: 'C',
-					width: 60,
-					height: 60,
-					top: 200,
-					left: 350,
-					angle: 0,
-					type: 1,
-				},
-			],
-			draggable_element_id: null,
-			mouse_down: false,
-			original_width: 0,
-			original_height: 0,
-			original_x: 0,
-			original_y: 0,
-			original_mouse_x: 0,
-			original_mouse_y: 0,
-			minWidth: 20,
-			maxWidth: 450,
-			minHeight: 20,
-			maxHeight: 450,
-		};
-	},
-	mounted() {
-		this.draw();
-	},
-	methods: {
-		selectTable(id) {
-			this.draggable_element_id = id;
-			this.mouse_down = true;
-		},
-		deselectTable() {
-			this.draggable_element_id = null;
-			this.mouse_down = false;
-		},
-		drag(event) {
-			if (this.draggable_element_id && this.mouse_down) {
-				const element = document.getElementById(this.draggable_element_id);
+	components: { DragResize },
+	setup() {
+		const state = reactive<NewObject>({
+			objectShape: SHAPE_SHAPE_RECTANGLE,
+			objectWidth: 50,
+			objectHeight: 50,
+		});
+		const mouseDown = ref<boolean>(false);
+		const objects = reactive<Shape[]>([
+			{
+				id: uuid(),
+				shape: SHAPE_SHAPE_RECTANGLE,
+				width: 100,
+				height: 100,
+				xAxis: 90,
+				yAxis: 80,
+				rotationDegree: 0,
+			},
+			{
+				id: uuid(),
+				shape: SHAPE_SHAPE_RECTANGLE,
+				width: 50,
+				height: 50,
+				xAxis: 200,
+				yAxis: 200,
+				rotationDegree: 0,
+			},
+		]);
+		const selectedObjectId = ref<null | string>(null);
 
-				element.style.left = event.clientX - Math.round(element.offsetWidth / 3) + 'px';
-				element.style.top = event.clientY - Math.round(element.offsetHeight / 3) + 'px';
+		const divs = ref([]);
+
+		// make sure to reset the refs before each update
+		onBeforeUpdate(() => {
+			divs.value = [];
+		});
+
+		const disableAddButton = computed(() => {
+			if (selectedObjectId.value) {
+				return true;
 			}
-		},
-		draw() {
-			for (const table of this.tables) {
-				const draggable = document.getElementById(table.id);
 
-				draggable.style.top = table.top + 'px';
-				draggable.style.left = table.left + 'px';
+			return state.objectShape === SHAPE_SHAPE_RECTANGLE || state.objectShape === SHAPE_SHAPE_CIRCLE ? true : false;
+		});
 
-				draggable.style.width = table.width + 'px';
-				draggable.style.height = table.height + 'px';
-				draggable.style.transform = 'rotate(' + table.angle + 'deg)';
-				if (table.type === 1) {
-					draggable.style.borderRadius = '50%';
+		function selectObject(objectId: string) {
+			selectedObjectId.value = objectId;
+			mouseDown.value = true;
+		}
+
+		function deselectObject() {
+			if (!selectedObjectId.value) {
+				return;
+			}
+			selectedObjectId.value = null;
+			state.objectWidth = 50;
+			state.objectHeight = 50;
+			state.objectShape = SHAPE_SHAPE_RECTANGLE;
+			mouseDown.value = false;
+		}
+
+		function addNewShape() {
+			if (!state.objectShape) {
+				return;
+			}
+
+			const width = state.objectWidth && state.objectWidth >= 10 ? state.objectWidth : 50;
+			const height = state.objectHeight && state.objectHeight >= 10 ? state.objectHeight : 50;
+			const xAxis = (SHAPE_MAX_WIDTH - width) / 2;
+			const yAxis = (SHAPE_MAX_HEIGHT - height) / 2;
+
+			const id = uuid();
+
+			objects.push({
+				id: id,
+				shape: state.objectShape,
+				width: width,
+				height: height,
+				xAxis: xAxis,
+				yAxis: yAxis,
+				rotationDegree: 0,
+			});
+
+			selectObject(id);
+		}
+
+		function deleteShape() {
+			const objectIndex = _.findIndex(objects, { id: selectedObjectId.value });
+			if (objectIndex >= 0) {
+				objects.splice(objectIndex, 1);
+			}
+			deselectObject();
+		}
+
+		function updateSelectedObject() {
+			const objectIndex = _.findIndex(objects, { id: selectedObjectId.value });
+
+			if (objectIndex >= 0) {
+				if (selectedObjectId.value && divs.value[selectedObjectId.value]) {
+					divs.value[selectedObjectId.value][0].draw();
+				}
+			}
+		}
+
+		function updateWidth() {
+			if (!selectedObjectId.value) {
+				return;
+			}
+
+			// NOTE: MIN object width should be OBJECT_MIN_WIDTH
+			if (state.objectWidth && state.objectWidth <= SHAPE_MIN_WIDTH) {
+				state.objectWidth = SHAPE_MIN_WIDTH;
+			}
+
+			const selectedShape: undefined | Shape = _.find(objects, {
+				id: selectedObjectId.value,
+			});
+
+			// NOTE: object should be inside Parent Canvas
+			if (selectedShape && state.objectWidth + selectedShape.xAxis > SHAPE_MAX_WIDTH) {
+				state.objectWidth = SHAPE_MAX_WIDTH - selectedShape.xAxis;
+				const index: number = _.findIndex(objects, {
+					id: selectedObjectId.value,
+				});
+
+				if (index >= 0) {
+					objects[index].width = state.objectWidth;
 				}
 			}
 
-			const parent_canvas = document.getElementById('parent_canvas');
-			parent_canvas.addEventListener('mouseup', (event) => {
-				this.mouse_down = false;
+			updateSelectedObject();
+		}
+
+		function updateHeight() {
+			if (!selectedObjectId.value) {
+				return;
+			}
+
+			// NOTE: MIN object height should be OBJECT_MIN_HEIGHT
+			if (state.objectHeight && state.objectHeight <= SHAPE_MIN_HEIGHT) {
+				state.objectHeight = SHAPE_MIN_HEIGHT;
+			}
+
+			const selectedShape: undefined | Shape = _.find(objects, {
+				id: selectedObjectId.value,
 			});
-		},
-		mouseDown(event) {
-			this.mouse_down = true;
-		},
-		resizeMouseDown(event) {
-			const element = document.getElementById(this.draggable_element_id);
 
-			this.original_width = element.offsetWidth;
-			this.original_height = element.offsetHeight;
-			this.original_x = element.getBoundingClientRect().left;
-			this.original_y = element.getBoundingClientRect().top;
-			this.original_mouse_x = event.pageX;
-			this.original_mouse_y = event.pageY;
-			this.mouse_down = true;
-		},
-		resize(direction, event) {
-			if (this.draggable_element_id === null) {
-				return;
+			// NOTE: object should be inside Parent Canvas
+			if (selectedShape && state.objectHeight + selectedShape.yAxis > SHAPE_MAX_HEIGHT) {
+				state.objectHeight = SHAPE_MAX_HEIGHT - selectedShape.yAxis;
+				const index: number = _.findIndex(objects, {
+					id: selectedObjectId.value,
+				});
+
+				if (index >= 0) {
+					objects[index].height = state.objectHeight;
+				}
 			}
 
-			if (this.mouse_down === false) {
-				return;
-			}
+			updateSelectedObject();
+		}
 
-			const element = document.getElementById(this.draggable_element_id);
-
-			switch (direction) {
-				case 'top':
-					const top_height = this.original_height - (event.pageY - this.original_mouse_y);
-
-					element.style.height = this.getHeight(top_height) + 'px';
-					element.style.top = this.original_y + (event.pageY - this.original_mouse_y) + 'px';
-					break;
-
-				case 'right':
-					const right_width = event.pageX - element.getBoundingClientRect().left;
-					element.style.width = this.getWidth(right_width) + 'px';
-					break;
-
-				case 'bottom':
-					const bottom_height = this.original_height + (event.pageY - this.original_mouse_y);
-
-					element.style.height = this.getHeight(bottom_height) + 'px';
-					break;
-
-				case 'left':
-					const left_width = this.original_width - (event.pageX - this.original_mouse_x);
-
-					element.style.width = this.getWidth(left_width) + 'px';
-					element.style.left = this.original_x + (event.pageX - this.original_mouse_x) + 'px';
-					break;
-
-				default:
-					// do nothing
-					break;
-			}
-		},
-		rotate(event) {
-			if (this.draggable_element_id === null) {
-				return;
-			}
-
-			if (this.mouse_down === false) {
-				return;
-			}
-
-			const element = document.getElementById(this.draggable_element_id);
-
-			const pwBox = element.getBoundingClientRect();
-			const center_x = (pwBox.left + pwBox.right) / 2;
-			const center_y = (pwBox.top + pwBox.bottom) / 2;
-			// get mouse position
-			const mouse_x = event.pageX;
-			const mouse_y = event.pageY;
-			const radians = Math.atan2(mouse_x - center_x, mouse_y - center_y);
-			const degree = Math.round(radians * (180 / Math.PI) * -1 + 100);
-
-			const rotate = 'rotate(' + (degree + 30) + 'deg)';
-
-			element.style.transform = rotate;
-		},
-		getWidth(width) {
-			if (width < this.minWidth) {
-				return this.minWidth;
-			}
-
-			if (width > this.maxWidth) {
-				return this.maxWidth;
-			}
-
-			return width;
-		},
-		getHeight(height) {
-			if (height < this.minHeight) {
-				return this.minHeight;
-			}
-
-			if (height > this.maxHeight) {
-				return this.maxHeight;
-			}
-
-			return height;
-		},
+		return {
+			updateSelectedObject,
+			state,
+			objects,
+			selectedObjectId,
+			selectObject,
+			deselectObject,
+			deleteShape,
+			disableAddButton,
+			addNewShape,
+			updateWidth,
+			updateHeight,
+		};
 	},
-};
+});
 </script>
-
 <style>
-#app {
-	font-family: 'Avenir', Helvetica, Arial, sans-serif;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	text-align: center;
-	color: #2c3e50;
-	margin-top: 60px;
-}
 .parent_canvas {
-	margin: 20px;
-	border-radius: 3px;
-	background-color: #dddddd;
-	width: 450px;
-	height: 450px;
-	overflow: hidden;
+	height: 650px;
+	width: 1026px;
+	background-color: #f1f4f7;
+	position: relative;
+	border: 1px solid #d5d9dc;
+	cursor: default;
+	flex: none;
 	box-sizing: border-box;
-}
-.draggable {
-	box-sizing: border-box;
-	height: 50px;
-	width: 50px;
-	padding: 5px;
-	background-color: #2c3e50;
-	border-radius: 3px;
-	cursor: move;
-	position: absolute;
-	-webkit-touch-callout: none; /* iOS Safari */
-	-webkit-user-select: none; /* Safari */
-	-khtml-user-select: none; /* Konqueror HTML */
-	-moz-user-select: none; /* Old versions of Firefox */
-	-ms-user-select: none; /* Internet Explorer/Edge */
-	user-select: none;
-}
-.active {
-	background-color: #0d93c9 !important;
-	border: 0.7px solid #0d93c9;
-	z-index: 1;
+	border-radius: 1px;
 }
 
-.active .resizer {
-	width: 7px;
-	height: 7px;
-	border-radius: 50%; /*magic to turn square into circle*/
-	background: white;
-	border: 1px solid #0d93c9;
-	position: absolute;
-}
-.resizer.resizer_left {
-	left: -4px;
-	bottom: 40%;
-	cursor: ew-resize;
-}
-.resizer.resizer_top {
-	left: 40%;
-	top: -4px;
-	cursor: ns-resize;
-}
-.resizer.resizer_right {
-	right: -4px;
-	top: 45%;
-	cursor: ew-resize;
-}
-.resizer.resizer_bottom {
-	right: 45%;
-	bottom: -4px;
-	cursor: ns-resize;
-}
-.drag_item {
-	padding: 4px;
-	box-sizing: border-box;
+.floor_paln_editor {
+	overflow: auto;
+	left: 0;
+	top: 0;
 	width: 100%;
 	height: 100%;
+	padding: 16px;
 	display: flex;
-	justify-content: center;
-	align-items: center;
-	color: #fff;
+	background-color: rgba(0, 0, 0, 0.2);
+	border: 1px solid #cccccc;
+	border-radius: 4px;
+	box-sizing: border-box;
 }
-.rotate_svg {
-	cursor: move; /* fallback if grab cursor is unsupported */
-	cursor: grab;
-	cursor: -moz-grab;
-	cursor: -webkit-grab;
-	position: absolute;
-	top: -20px;
-	right: -20px;
+
+.type {
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	padding: 5px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: center;
+	background-color: #ffffff;
+}
+.type_rect {
+	border: 1px solid #cccccc;
+	height: 15px;
+	width: 40px;
+	margin-top: 5px;
+	cursor: pointer;
+}
+.type_circle {
+	border: 1px solid #cccccc;
+	border-radius: 50%;
+	height: 20px;
+	width: 20px;
+	margin-top: 5px;
+	cursor: pointer;
+}
+.type_wall {
+	margin-top: 5px;
+	margin-bottom: 5px;
+	border: 1px solid #cccccc;
+	height: 10px;
+	width: 40px;
+	cursor: pointer;
+}
+
+.selected_type {
+	background-color: #f9fefd !important;
+	border: 1px solid #55c4a2 !important;
+}
+
+.svg_teal {
+	fill: #00b5ad;
+}
+
+.svg_disabled {
+	opacity: 0.4;
 }
 </style>
