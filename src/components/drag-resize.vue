@@ -2,68 +2,63 @@
 	<div
 		:key="object.id"
 		class="draggable"
-		:class="{ active: selected_object_id === object.id, obstruction: object.type === 0 }"
+		:class="{
+			active: selectedObjectId === object.id,
+		}"
 		:id="object.id"
 		@mousedown.stop.prevent="selectObject(object.id)"
 	>
-		<div class="drag_content" :id="object.id + 'drag_content'">{{ object.name }}</div>
-		<template v-show="selected_object_id === object.id">
-			<div
-				class="object_resizer object_resizer_top"
-				:id="object.id + 'object_resizer_top'"
-				:class="{ obstruction: object.type === 0 }"
-				@mousedown.stop.prevent="selectResizeDirection('top')"
-			></div>
-			<div
-				class="object_resizer object_resizer_right"
-				:id="object.id + 'object_resizer_right'"
-				:class="{ obstruction: object.type === 0 }"
-				@mousedown.stop.prevent="selectResizeDirection('right')"
-			></div>
-			<div
-				class="object_resizer object_resizer_bottom"
-				:id="object.id + 'object_resizer_bottom'"
-				:class="{ obstruction: object.type === 0 }"
-				@mousedown.stop.prevent="selectResizeDirection('bottom')"
-			></div>
-			<div
-				class="object_resizer object_resizer_left"
-				:id="object.id + 'object_resizer_left'"
-				:class="{ obstruction: object.type === 0 }"
-				@mousedown.stop.prevent="selectResizeDirection('left')"
-			></div>
-		</template>
-		<i v-show="selected_object_id === object.id" class="undo icon object_rotate_handler" :class="object.type === 0 ? 'grey' : 'blue'"></i>
+		<div class="drag_content" :id="object.id + 'drag_content'">
+			{{ object.name }}
+		</div>
+		<div
+			v-show="selectedObjectId === object.id"
+			class="object_resizer object_resizer_top"
+			:id="object.id + 'object_resizer_top'"
+			@mousedown.stop.prevent="selectResizeDirection('top')"
+		></div>
+		<div
+			v-show="selectedObjectId === object.id"
+			class="object_resizer object_resizer_right"
+			:id="object.id + 'object_resizer_right'"
+			@mousedown.stop.prevent="selectResizeDirection('right')"
+		></div>
+		<div
+			v-show="selectedObjectId === object.id"
+			class="object_resizer object_resizer_bottom"
+			:id="object.id + 'object_resizer_bottom'"
+			@mousedown.stop.prevent="selectResizeDirection('bottom')"
+		></div>
+		<div
+			v-show="selectedObjectId === object.id"
+			class="object_resizer object_resizer_left"
+			:id="object.id + 'object_resizer_left'"
+			@mousedown.stop.prevent="selectResizeDirection('left')"
+		></div>
+		<!-- <span v-show="selectedObjectId === object.id" class="object_rotate_handler"
+			><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+				<path
+					d="M12 0c-3.31 0-6.291 1.353-8.459 3.522l-2.48-2.48-1.061 7.341 7.437-.966-2.489-2.488c1.808-1.808 4.299-2.929 7.052-2.929 5.514 0 10 4.486 10 10s-4.486 10-10 10c-3.872 0-7.229-2.216-8.89-5.443l-1.717 1.046c2.012 3.803 6.005 6.397 10.607 6.397 6.627 0 12-5.373 12-12s-5.373-12-12-12z"
+				/></svg
+		></span> -->
 	</div>
 </template>
 <script lang="ts">
-import { defineComponent, reactive, ref, Ref } from 'vue';
-import { Shape, Bounds, MousePoistion } from '@/types';
-import _ from 'lodash';
+import { defineComponent, reactive, ref, onMounted } from 'vue';
+import { Bounds, MousePoistion } from '@/types';
+import { computeWidth, computeHeight, restrictToBounds, snapToGrid } from '@/utils';
 
 export default defineComponent({
 	name: 'drag-resize',
-	props: {
-		object: {
-			type: Object,
-			required: true,
-		},
-		selectedObjectId: {
-			type: String,
-			required: true,
-		},
-	},
-
-	setup(props, { emit }) {
-		const root = ref() as Ref<HTMLElement>;
-
+	props: ['object', 'selectedObjectId'],
+	setup(props, context) {
 		const state = reactive({
 			minWidth: 10,
 			maxWidth: 0,
 			minHeight: 10,
 			maxHeight: 0,
-			cnavasWidth: 0,
-			canvasHeight: 0,
+			cnavasWidth: 1020,
+			canvasHeight: 650,
 			width: 0,
 			height: 0,
 			mouseClickPosition: {},
@@ -104,12 +99,12 @@ export default defineComponent({
 				return false;
 			}
 
-			element.value.style.top = props.object.y_axis + 'px';
-			element.value.style.left = props.object.x_axis + 'px';
+			element.value.style.top = props.object.xAxis + 'px';
+			element.value.style.left = props.object.yAxis + 'px';
 
 			element.value.style.width = props.object.width + 'px';
 			element.value.style.height = props.object.height + 'px';
-			element.value.style.transform = 'rotate(' + props.object.rotation_degree + 'deg)';
+			element.value.style.transform = 'rotate(' + props.object.rotationDegree + 'deg)';
 			if (props.object.shape === 1) {
 				element.value.style.borderRadius = '50%';
 			} else {
@@ -129,89 +124,28 @@ export default defineComponent({
 				}
 			}
 
-			// const divs = document.querySelectorAll('.object_rotate_handler');
-			// for (const rotate of divs) {
-			// 	this.makeRotatableDiv(rotate);
-			// }
-
-			// this.rotateText();
+			// eslint-disable-next-line @typescript-eslint/no-use-before-define
+			makeRotatableDiv();
 		}
 
-		function setResizerPosition() {
-			if (!element.value) {
-				return;
-			}
+		onMounted(() => {
+			draw();
 
-			const horizontalResizerPosition = Math.round(element.value.offsetWidth / 2) - 5;
-			const topResizer = document.getElementById(props.object.id + 'object_resizer_top');
-			const bottomResizer = document.getElementById(props.object.id + 'object_resizer_bottom');
-
-			if (topResizer) {
-				topResizer.style.left = horizontalResizerPosition + 'px';
-			}
-			if (bottomResizer) {
-				bottomResizer.style.left = horizontalResizerPosition + 'px';
-			}
-
-			const verticalResizerPosition = Math.round(element.value.offsetHeight / 2) - 5;
-			const leftResizer = document.getElementById(props.object.id + 'object_resizer_left');
-			const rightResizer = document.getElementById(props.object.id + 'object_resizer_right');
-
-			if (leftResizer) {
-				leftResizer.style.top = verticalResizerPosition + 'px';
-			}
-			if (rightResizer) {
-				rightResizer.style.top = verticalResizerPosition + 'px';
-			}
-		}
-
-		function makeDraggableDiv(id: string) {
-			element.value = document.getElementById(id);
-			if (!element.value) {
-				return;
-			}
-
-			element.value.addEventListener('mousedown', (event: MouseEvent) => {
-				event.stopPropagation();
-				event.preventDefault();
-				// if the mouse is somehow slipped out of the drag_element,
-				// the element will still drag based on the mouse position
-				mouseClickPosition.mouseX = event.pageX;
-				mouseClickPosition.mouseY = event.pageY;
-				mouseClickPosition.left = state.left;
-				mouseClickPosition.right = state.right;
-				mouseClickPosition.top = state.top;
-				mouseClickPosition.bottom = state.bottom;
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
-				bounds = calcResizeLimits();
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
-				window.addEventListener('mousemove', drag);
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
-				window.addEventListener('mouseup', stopDrag);
-			});
-		}
-
-		function makeResizableDiv(element: Element) {
-			element.addEventListener('mousedown', (event) => {
-				event.stopPropagation();
-				event.preventDefault();
-
-				// mouseClickPosition.mouseX = event.pageX;
-				// mouseClickPosition.mouseY = event.pageY;
-				mouseClickPosition.left = state.left;
-				mouseClickPosition.right = state.right;
-				mouseClickPosition.top = state.top;
-				mouseClickPosition.bottom = state.bottom;
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
-				bounds = calcResizeLimits();
-				// if the mouse is somehow slipped out of the drag_element,
-				// the element will still drag based on the mouse position
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
-				window.addEventListener('mousemove', resize);
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
-				// window.addEventListener('mouseup', stopResize);
-			});
-		}
+			state.width = props.object.width;
+			state.height = props.object.height;
+			state.top = props.object.yAxis;
+			state.left = props.object.xAxis;
+			state.right = state.cnavasWidth - state.width - state.left;
+			state.bottom = state.canvasHeight - state.height - state.top;
+			mouseClickPosition = {
+				mouseX: 0,
+				mouseY: 0,
+				left: 0,
+				right: 0,
+				top: 0,
+				bottom: 0,
+			};
+		});
 
 		function calcResizeLimits() {
 			const minW = state.minWidth;
@@ -221,8 +155,8 @@ export default defineComponent({
 			const [gridX, gridY] = state.grid;
 			const width = props.object.width;
 			const height = props.object.height;
-			const left = props.object.x_axis;
-			const top = props.object.y_axis;
+			const left = props.object.xAxis;
+			const top = props.object.yAxis;
 			const right = state.right;
 			const bottom = state.bottom;
 
@@ -258,6 +192,34 @@ export default defineComponent({
 			return limits;
 		}
 
+		function setResizerPosition() {
+			if (!element.value) {
+				return;
+			}
+
+			const horizontalResizerPosition = Math.round(element.value.offsetWidth / 2) - 5;
+			const topResizer = document.getElementById(props.object.id + 'object_resizer_top');
+			const bottomResizer = document.getElementById(props.object.id + 'object_resizer_bottom');
+
+			if (topResizer) {
+				topResizer.style.left = horizontalResizerPosition + 'px';
+			}
+			if (bottomResizer) {
+				bottomResizer.style.left = horizontalResizerPosition + 'px';
+			}
+
+			const verticalResizerPosition = Math.round(element.value.offsetHeight / 2) - 5;
+			const leftResizer = document.getElementById(props.object.id + 'object_resizer_left');
+			const rightResizer = document.getElementById(props.object.id + 'object_resizer_right');
+
+			if (leftResizer) {
+				leftResizer.style.top = verticalResizerPosition + 'px';
+			}
+			if (rightResizer) {
+				rightResizer.style.top = verticalResizerPosition + 'px';
+			}
+		}
+
 		function drag(event: MouseEvent) {
 			if (props.object.id !== props.selectedObjectId || !element.value) {
 				return;
@@ -269,8 +231,8 @@ export default defineComponent({
 				left = 0;
 			}
 
-			if (left + element.value.offsetWidth > root.value.parentNode.offsetWidth) {
-				left = root.value.parentNode.offsetWidth - element.value.offsetWidth;
+			if (left + element.value.offsetWidth > 1020) {
+				left = 1020 - element.value.offsetWidth;
 			}
 
 			let top = event.movementY + element.value.offsetTop;
@@ -279,8 +241,8 @@ export default defineComponent({
 				top = 0;
 			}
 
-			if (root.value && root.value.parentNode && top + element.value.offsetHeight >= root.value.parentNode.offsetHeight) {
-				top = root.value.parentNode.offsetHeight - element.value.offsetHeight;
+			if (top + element.value.offsetHeight >= 650) {
+				top = 650 - element.value.offsetHeight;
 			}
 
 			state.left = left;
@@ -290,6 +252,11 @@ export default defineComponent({
 			element.value.style.top = top + 'px';
 			state.right = state.cnavasWidth - state.width - state.left;
 			state.bottom = state.canvasHeight - state.height - state.top;
+		}
+
+		function stopDrag() {
+			// updateObject();
+			window.removeEventListener('mousemove', drag);
 		}
 
 		function resize(event: MouseEvent) {
@@ -305,25 +272,18 @@ export default defineComponent({
 			const tmpDeltaX = amouseClickPosition.mouseX - event.pageX;
 			const tmpDeltaY = amouseClickPosition.mouseY - event.pageY;
 
-			// eslint-disable-next-line @typescript-eslint/no-use-before-define
 			const [deltaX, deltaY] = snapToGrid(state.grid, tmpDeltaX, tmpDeltaY, state.scale);
 			if (resizeDirection.value === 'bottom') {
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
 				bottom = restrictToBounds(amouseClickPosition.bottom + deltaY, bounds.minBottom, bounds.maxBottom);
 			} else if (resizeDirection.value === 'top') {
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
 				top = restrictToBounds(amouseClickPosition.top - deltaY, bounds.minTop, bounds.maxTop);
 			} else if (resizeDirection.value === 'right') {
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
 				right = restrictToBounds(amouseClickPosition.right + deltaX, bounds.minRight, bounds.maxRight);
 			} else if (resizeDirection.value === 'left') {
-				// eslint-disable-next-line @typescript-eslint/no-use-before-define
 				left = restrictToBounds(amouseClickPosition.left - deltaX, bounds.minLeft, bounds.maxLeft);
 			}
 
-			// eslint-disable-next-line @typescript-eslint/no-use-before-define
 			const width = computeWidth(state.cnavasWidth, left, right);
-			// eslint-disable-next-line @typescript-eslint/no-use-before-define
 			const height = computeHeight(state.canvasHeight, top, bottom);
 
 			state.left = left;
@@ -341,6 +301,12 @@ export default defineComponent({
 			setResizerPosition();
 		}
 
+		function stopResize() {
+			resizeDirection.value = null;
+			// updateObject();
+			window.removeEventListener('mousemove', resize);
+		}
+
 		function rotate(event: MouseEvent) {
 			if (props.selectedObjectId !== props.object.id || !element.value) {
 				return;
@@ -355,89 +321,103 @@ export default defineComponent({
 
 			const rotate = 'rotate(' + degree + 'deg)';
 
-			// props.object.rotation_degree = degree;
+			// props.object.rotationDegree = degree;
 
 			element.value.style.webkitTransform = rotate;
 			element.value.style.webkitTransformOrigin = '50% 50%';
 			element.value.style.transform = rotate;
 			element.value.style.transformOrigin = '50% 50%';
-			// eslint-disable-next-line @typescript-eslint/no-use-before-define
-			rotateText();
 		}
 
-		function computeWidth(cnavasWidth: number, left: number, right: number) {
-			return cnavasWidth - left - right;
+		function stopRotate() {
+			// updateObject();
+			window.removeEventListener('mousemove', rotate);
 		}
 
-		function computeHeight(canvasHeight: number, top: number, bottom: number) {
-			return canvasHeight - top - bottom;
+		function makeDraggableDiv(id: string) {
+			element.value = document.getElementById(id);
+			if (!element.value) {
+				return;
+			}
+
+			element.value.addEventListener('mousedown', (event: MouseEvent) => {
+				event.stopPropagation();
+				event.preventDefault();
+				// if the mouse is somehow slipped out of the drag_element,
+				// the element will still drag based on the mouse position
+				mouseClickPosition.mouseX = event.pageX;
+				mouseClickPosition.mouseY = event.pageY;
+				mouseClickPosition.left = state.left;
+				mouseClickPosition.right = state.right;
+				mouseClickPosition.top = state.top;
+				mouseClickPosition.bottom = state.bottom;
+				bounds = calcResizeLimits();
+				window.addEventListener('mousemove', drag);
+				window.addEventListener('mouseup', stopDrag);
+			});
+		}
+
+		function makeResizableDiv(element: Element) {
+			element.addEventListener('mousedown', (event) => {
+				event.stopPropagation();
+				event.preventDefault();
+
+				// mouseClickPosition.mouseX = event.pageX;
+				// mouseClickPosition.mouseY = event.pageY;
+				mouseClickPosition.left = state.left;
+				mouseClickPosition.right = state.right;
+				mouseClickPosition.top = state.top;
+				mouseClickPosition.bottom = state.bottom;
+				bounds = calcResizeLimits();
+				// if the mouse is somehow slipped out of the drag_element,
+				// the element will still drag based on the mouse position
+				window.addEventListener('mousemove', resize);
+				window.addEventListener('mouseup', stopResize);
+			});
+		}
+
+		function makeRotatableDiv() {
+			const element = document.getElementById('object_rotate_handler');
+			if (!element) {
+				return;
+			}
+
+			element.addEventListener('mousedown', (event) => {
+				event.stopPropagation();
+				event.preventDefault();
+				// if the mouse is somehow slipped out of the drag_element,
+				// the element will still drag based on the mouse position
+				window.addEventListener('mousemove', rotate);
+				window.addEventListener('mouseup', stopRotate);
+			});
 		}
 
 		function selectObject(id: string) {
-			emit('select-object', id);
+			context.emit('selectobject', id);
 		}
 
 		function selectResizeDirection(direction: string | null) {
 			resizeDirection.value = direction;
 		}
 
-		function stopDrag() {
-			// updateObject();
-			window.removeEventListener('mousemove', drag);
-		}
+		// function updateObject() {
+		//   if (!element.value) {
+		//     return;
+		//   }
 
-		function snapToGrid(grid: number[], pendingX: number, pendingY: number, scale = 1) {
-			const x = Math.round(pendingX / scale / grid[0]) * grid[0];
-			const y = Math.round(pendingY / scale / grid[1]) * grid[1];
+		// props.object.xAxis = element.value.offsetLeft;
+		// props.object.yAxis = element.value.offsetTop;
+		// props.object.width = element.value.offsetWidth;
+		// props.object.height = element.value.offsetHeight;
+		// emit('update:object', props.object);
+		// }
 
-			return [x, y];
-		}
-
-		function restrictToBounds(value: number, min: null | number, max: null | number) {
-			if (min !== null && value < min) {
-				return min;
-			}
-
-			if (max !== null && max < value) {
-				return max;
-			}
-
-			return value;
-		}
-
-		function updateObject() {
-			if (!element.value) {
-				return;
-			}
-
-			// props.object.x_axis = element.value.offsetLeft;
-			// props.object.y_axis = element.value.offsetTop;
-			// props.object.width = element.value.offsetWidth;
-			// props.object.height = element.value.offsetHeight;
-			// emit('update:object', props.object);
-		}
-
-		function rotateText() {
-			const dragContent = document.getElementById(props.object.id + 'drag_content');
-			if (dragContent) {
-				dragContent.style.transform = 'rotate(' + -1 * props.object.rotation_degree + 'deg)';
-			}
-		}
-
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		function onMounted() {
-			draw();
-
-			state.cnavasWidth = $el.parentNode.offsetWidth;
-			state.canvasHeight = $el.parentNode.offsetHeight;
-			state.width = props.object.width;
-			state.height = props.object.height;
-			state.top = props.object.y_axis;
-			state.left = props.object.x_axis;
-			state.right = state.cnavasWidth - state.width - state.left;
-			state.bottom = state.canvasHeight - state.height - state.top;
-			mouseClickPosition = { mouseX: 0, mouseY: 0, left: 0, right: 0, top: 0, bottom: 0 };
-		}
+		return {
+			draw,
+			selectObject,
+			selectResizeDirection,
+			rotate,
+		};
 	},
 });
 </script>
@@ -518,7 +498,6 @@ export default defineComponent({
 }
 .object_rotate_handler {
 	cursor: move; /* fallback if grab cursor is unsupported */
-	cursor: grab;
 	cursor: -moz-grab;
 	cursor: -webkit-grab;
 	position: absolute;

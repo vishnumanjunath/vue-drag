@@ -1,14 +1,14 @@
 <template>
-	<div id="app" @mousedown.self="deselectTable()">
+	<div id="app">
 		<div class="floor_paln_editor">
 			<div class="parent_canvas" id="parent_canvas" @mousedown.self="deselectObject()">
 				<drag-resize
-					v-for="object in location_floor_plan.objects"
+					v-for="object in objects"
 					:ref="object.id"
 					:key="object.id"
-					v-model:object="object.value"
-					:selected_object_id="selected_object_id"
-					@selectObject="selectObject"
+					:object="object"
+					:selectedObjectId="selectedObjectId"
+					@selectobject="selectObject"
 				></drag-resize>
 			</div>
 		</div>
@@ -138,12 +138,16 @@ export default defineComponent({
 				state.objectWidth = SHAPE_MIN_WIDTH;
 			}
 
-			const selectedShape: undefined | Shape = _.find(objects, { id: selectedObjectId.value });
+			const selectedShape: undefined | Shape = _.find(objects, {
+				id: selectedObjectId.value,
+			});
 
 			// NOTE: object should be inside Parent Canvas
 			if (selectedShape && state.objectWidth + selectedShape.xAxis > SHAPE_MAX_WIDTH) {
 				state.objectWidth = SHAPE_MAX_WIDTH - selectedShape.xAxis;
-				const index: number = _.findIndex(objects, { id: selectedObjectId.value });
+				const index: number = _.findIndex(objects, {
+					id: selectedObjectId.value,
+				});
 
 				if (index >= 0) {
 					objects[index].width = state.objectWidth;
@@ -163,12 +167,16 @@ export default defineComponent({
 				state.objectHeight = SHAPE_MIN_HEIGHT;
 			}
 
-			const selectedShape: undefined | Shape = _.find(objects, { id: selectedObjectId.value });
+			const selectedShape: undefined | Shape = _.find(objects, {
+				id: selectedObjectId.value,
+			});
 
 			// NOTE: object should be inside Parent Canvas
 			if (selectedShape && state.objectHeight + selectedShape.yAxis > SHAPE_MAX_HEIGHT) {
 				state.objectHeight = SHAPE_MAX_HEIGHT - selectedShape.yAxis;
-				const index: number = _.findIndex(objects, { id: selectedObjectId.value });
+				const index: number = _.findIndex(objects, {
+					id: selectedObjectId.value,
+				});
 
 				if (index >= 0) {
 					objects[index].height = state.objectHeight;
@@ -177,6 +185,20 @@ export default defineComponent({
 
 			updateSelectedObject();
 		}
+
+		return {
+			updateSelectedObject,
+			state,
+			objects,
+			selectedObjectId,
+			selectObject,
+			deselectObject,
+			deleteShape,
+			disableAddButton,
+			addNewShape,
+			updateWidth,
+			updateHeight,
+		};
 	},
 });
 </script>
